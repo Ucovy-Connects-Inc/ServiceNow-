@@ -1,0 +1,61 @@
+var SRApprovalsAPI = Class.create();
+SRApprovalsAPI.prototype = {
+    initialize: function() {},
+
+    taskApproved: function(sysId, comment) {
+        if (gs.nil(sysId)) {
+            var error = new sn_ws_err.ServiceError();
+            error.setStatus(404);
+            error.setMessage('The sysId is empty');
+            return error;
+        }
+
+        if (!this.verifySysId(sysId)) {
+            var error = new sn_ws_err.ServiceError();
+            error.setStatus(404);
+            error.setMessage('The record is not found');
+            return error;
+        }
+
+        if (this.verifyRecordAction(sysId)) {
+            var userId = gs.getUserID();
+            var grApprove = new GlideRecordSecure('sysapproval_approver');
+            grApprove.addQuery('state', 'requested');
+            grApprove.addQuery('sys_id', sysId);
+            grApprove.addEncodedQuery('approver=' + userId);
+            grApprove.query();
+
+            if (grApprove.next()) {
+                grApprove.comments.setJournalEntry(comment);
+                grApprove.setValue('state', 'approved');
+                grApprove.update();
+                return 'Record has been approved';
+            } else {
+                var error1 = new sn_ws_err.ServiceError();
+                error1.setStatus(403);
+                error1.setMessage('You are not authorized to approve this record');
+                return error1;
+            }
+        } else {
+            var error2 = new sn_ws_err.ServiceError();
+            error2.setStatus(403);
+            error2.setMessage('This record has already been actioned');
+            return error2;
+        }
+    },
+
+    verifySysId: function(sysId) {
+        var grApproval = new GlideRecord('sysapproval_approver');
+        return grApproval.get(sysId);
+    },
+
+    verifyRecordAction: function(sysId) {
+        var grApproval = new GlideRecord('sysapproval_approver');
+        if (grApproval.get(sysId)) {
+            return grApproval.state == 'requested';
+        }
+        return false;
+    },
+
+    type: 'SRApprovalsAPI'
+};
